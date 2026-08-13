@@ -1,0 +1,1 @@
+Aegis Framework Factory repository write smoke test.
