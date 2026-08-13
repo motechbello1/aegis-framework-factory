@@ -1,0 +1,3 @@
+import React,{useEffect,useState} from 'react'
+import { factoryService } from '../services'
+export default function Catalogue(){const [items,setItems]=useState([]);useEffect(()=>{factoryService.getControls().then(setItems).catch(()=>setItems([]))},[]);return <div className="page-stack"><section className="panel"><div className="panel__header"><div><span className="panel__eyebrow">UNIVERSAL LIBRARY</span><h3>{items.length} common controls</h3></div></div><div className="control-grid">{items.map(c=><article className="control-card" key={c.control_id}><span className="control-id">{c.control_id}</span><span className="domain-chip">{c.domain}</span><h4>{c.title}</h4><p>{c.statement}</p></article>)}</div></section></div>}
