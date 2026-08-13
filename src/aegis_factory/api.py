@@ -5,6 +5,7 @@ import os
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .core import CONTROL_LIBRARY, FactoryRepository, FrameworkFactory
@@ -27,6 +28,13 @@ def create_app(db_path: str | None = None, publish_dir: str | None = None) -> Fa
     factory = FrameworkFactory(repository)
     target_dir = publish_dir or os.getenv("AEGIS_PUBLISH_DIR", "./published")
     app = FastAPI(title="Aegis360AI Framework Factory", version="0.2.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8080", "http://localhost:8080"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
 
     @app.get("/health")
     def health():
