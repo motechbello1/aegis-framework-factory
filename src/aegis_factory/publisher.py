@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from .database import RunRepository
 from .models import PublishResult, RunStatus
 
 
 class AegisPublisher:
-    def __init__(self, repository: RunRepository, publish_dir: str | Path) -> None:
+    def __init__(self, repository: Any, publish_dir: str | Path) -> None:
         self.repository = repository
         self.publish_dir = Path(publish_dir)
-        self.publish_dir.mkdir(parents=True, exist_ok=True)
 
     def publish(self, run_id: str) -> PublishResult:
+        if hasattr(self.repository, "publish_persisted"):
+            return self.repository.publish_persisted(run_id)
+
         run = self.repository.get(run_id)
         if run is None:
             raise KeyError(run_id)
@@ -21,6 +23,7 @@ class AegisPublisher:
         if run.package is None:
             raise ValueError("Framework package is missing")
 
+        self.publish_dir.mkdir(parents=True, exist_ok=True)
         target = self.publish_dir / f"{run.package.framework_key}.json"
         package_json = run.package.model_dump_json(indent=2)
         if target.exists() and target.read_text(encoding="utf-8") != package_json:
