@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,20 +11,45 @@ from .database import RunRepository
 from .models import FrameworkMetadata, IngestTextRequest, ReviewDecision
 from .parsers import UnsupportedDocumentError, extract_text
 from .publisher import AegisPublisher
+from .supabase_repository import SupabaseRunRepository
 from .workflow import FrameworkFactory
 
 
+def build_repository(db_path: str | None = None):
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
+    factory_secret = os.getenv("AEGIS_FACTORY_SUPABASE_SECRET")
+    configured = [bool(supabase_url), bool(supabase_key), bool(factory_secret)]
+    if any(configured) and not all(configured):
+        raise RuntimeError(
+            "Supabase persistence is partially configured. SUPABASE_URL, "
+            "SUPABASE_PUBLISHABLE_KEY and AEGIS_FACTORY_SUPABASE_SECRET must all be set."
+        )
+    if all(configured):
+        return SupabaseRunRepository(supabase_url, supabase_key, factory_secret)
+    return RunRepository(db_path)
+
+
 def create_app(db_path: str | None = None, publish_dir: str | None = None) -> FastAPI:
-    repository = RunRepository(db_path)
+    repository = build_repository(db_path)
     factory = FrameworkFactory(repository)
     publisher = AegisPublisher(repository, publish_dir or "./published")
 
-    app = FastAPI(title="Aegis360AI Framework Factory", version="0.1.0", description="Builds source-traceable compliance framework packages and gates publication behind human GRC review.")
-    app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+    app = FastAPI(title="Aegis360AI Framework Factory", version="0.2.0", description="Builds source-traceable compliance framework packages and gates publication behind human GRC review.")
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://aegis-framework-factory.vercel.app",
+    ]
+    extra_origin = os.getenv("AEGIS_FACTORY_FRONTEND_ORIGIN")
+    if extra_origin and extra_origin not in allowed_origins:
+        allowed_origins.append(extra_origin)
+    app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok", "service": "aegis-framework-factory"}
+        persistence = "supabase" if isinstance(repository, SupabaseRunRepository) else "sqlite"
+        return {"status": "ok", "service": "aegis-framework-factory", "persistence": persistence}
 
     @app.get("/v1/runs")
     def list_runs(status: str | None = Query(default=None), limit: int = Query(default=100, ge=1, le=500)) -> list[dict]:
